@@ -1,0 +1,177 @@
+application {
+  config {
+    baseName SportsHub
+    applicationType monolith
+    packageName com.acme.sportshub
+    authenticationType jwt
+    buildTool maven
+    prodDatabaseType postgresql
+    devDatabaseType postgresql
+    cacheProvider redis
+    enableHibernateCache true
+    clientFramework angular
+    skipClient true
+    serviceDiscoveryType no
+    enableSwaggerCodegen true
+    nativeLanguage en
+    languages [en]
+    testFrameworks [gatling, cucumber] // optional, remove if not needed
+  }
+}
+
+/* ===== Enums ===== */
+enum PageStatus { DRAFT, PUBLISHED }
+enum StageType { GROUP, KO }
+enum MatchStatus { SCHEDULED, LIVE, FT, POSTPONED, CANCELED }
+enum PartnerKind { HOTEL, FLIGHT, TOUR, TICKET, STREAMING }
+enum TopicType { TEAM, CITY, COMPETITION }
+
+/* ===== Core locations ===== */
+entity City {
+  name String required
+  countryCode String required
+  slug String required unique
+  tz String
+  airportCodes String
+  lat Double
+  lng Double
+}
+
+entity Venue {
+  name String required
+  slug String required unique
+  capacity Integer
+  tz String
+  lat Double
+  lng Double
+}
+relationship ManyToOne {
+  Venue{city(name) required} to City
+}
+
+/* ===== Competitions & matches ===== */
+entity Competition {
+  name String required
+  code String required unique
+  kind String required
+  region String
+  slug String required unique
+}
+
+entity Season {
+  yearStart Integer required
+  yearEnd Integer required
+  slug String required unique
+}
+relationship ManyToOne {
+  Season{competition(name) required} to Competition
+}
+
+entity Stage {
+  name String required
+  type StageType required
+  sortOrder Integer
+}
+relationship ManyToOne {
+  Stage{season(slug) required} to Season
+}
+
+entity Team {
+  name String required
+  countryCode String
+  fifaCode String
+  slug String required unique
+}
+
+entity Match {
+  round String
+  kickoff Instant required
+  status MatchStatus required
+  scoreHome Integer
+  scoreAway Integer
+  pensHome Integer
+  pensAway Integer
+}
+relationship ManyToOne {
+  Match{season(slug) required} to Season
+  Match{stage(name)} to Stage
+  Match{venue(name)} to Venue
+  Match{homeTeam(name) required} to Team
+  Match{awayTeam(name) required} to Team
+}
+
+/* ===== CMS-like dynamic pages ===== */
+entity Page {
+  slug String required unique
+  title String required
+  status PageStatus required
+  meta TextBlob       // store JSON as text for v1
+  publishedAt Instant
+}
+
+entity PageBlock {
+  type String required // Hero, FAQ, AffiliateRow, ...
+  data TextBlob        // JSON (text) for block payload
+  sortOrder Integer
+}
+relationship ManyToOne {
+  PageBlock{page(slug) required} to Page
+}
+
+/* ===== Affiliates & tracking ===== */
+entity AffiliatePartner {
+  name String required
+  kind PartnerKind required
+  program String
+  baseUrl String
+  geoRules TextBlob
+  active Boolean required
+}
+
+entity AffiliateOffer {
+  name String required
+  deeplinkPattern String required
+  params TextBlob
+  active Boolean required
+}
+relationship ManyToOne {
+  AffiliateOffer{partner(name) required} to AffiliatePartner
+}
+
+entity OutboundClick {
+  targetUrl String required
+  utm TextBlob
+  ip String
+  country String
+  userAgent String
+  createdAt Instant required
+}
+relationship ManyToOne {
+  OutboundClick{offer(name) required} to AffiliateOffer
+}
+
+/* ===== Email subscribers & alerts ===== */
+entity EmailSubscriber {
+  email String required unique
+  locale String
+  doubleOptIn Boolean
+  status String
+  createdAt Instant required
+  unsubscribedAt Instant
+}
+
+entity AlertSubscription {
+  topicType TopicType required  // TEAM/CITY/COMPETITION
+  topicRef String required      // e.g., slug or ID reference
+  channel String required       // EMAIL (for now)
+  createdAt Instant required
+}
+relationship ManyToOne {
+  AlertSubscription{subscriber(email) required} to EmailSubscriber
+}
+
+/* ===== Global generation options ===== */
+dto * with mapstruct
+service * with serviceClass
+paginate * with pagination
+filter *
